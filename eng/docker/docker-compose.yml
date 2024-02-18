@@ -10,7 +10,7 @@ services:
     hostname: api01
     environment:
       - ASPNETCORE_URLS=http://0.0.0.0:3000      
-      - ConnectionStrings__Database=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;Pooling=true;MinPoolSize=240;MaxPoolSize=490;ConnectionLifeTime=15;Auto Prepare Min Usages=1;No Reset On Close=true;
+      - ConnectionStrings__Database=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;Pooling=true;MinPoolSize=100;MaxPoolSize=200;ConnectionLifeTime=15;Auto Prepare Min Usages=1;No Reset On Close=true;
     volumes:
       - ./postgresql.conf:/var/lib/postgresql/data/postgresql.conf
       - ./postgresql.conf:/etc/postgresql.conf
@@ -23,7 +23,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: "80MB"
+          memory: "90MB"
 
   api02:
     <<: *api
@@ -33,25 +33,7 @@ services:
     #   - ConnectionStrings__Default=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;
     ports:
       - "3002:3000"
-  
-  api03:
-    <<: *api
-    hostname: api02
-    # environment:
-    #  - ASPNETCORE_URLS=http://0.0.0.0:3000      
-    #   - ConnectionStrings__Default=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;
-    ports:
-      - "3003:3000"
 
-  api04:
-    <<: *api
-    hostname: api02
-    # environment:
-    #  - ASPNETCORE_URLS=http://0.0.0.0:3000      
-    #   - ConnectionStrings__Default=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;
-    ports:
-      - "3004:3000"
-  
   nginx:
     image: nginx:latest
     volumes:
@@ -59,14 +41,13 @@ services:
     depends_on:
       - api01
       - api02
-      - api03
     ports:
       - "9999:9999"
     deploy:
       resources:
         limits:
-          cpus: "0.4"
-          memory: "134MB"
+          cpus: "0.1"
+          memory: "40MB"
     ulimits:
       nofile:
         soft: 500000
@@ -83,11 +64,11 @@ services:
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     command: postgres -c checkpoint_timeout=600 -c max_wal_size=4096
-    # deploy:
-      # resources:
-        # limits:
-    #       cpus: "0.5"
-          # memory: "256MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.7"
+          memory: "280MB"
 
 networks:
   default:

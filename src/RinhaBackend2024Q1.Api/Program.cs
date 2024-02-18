@@ -163,20 +163,10 @@ balanceApi.MapGet("/{id}/extrato", ([FromRoute] int id) =>
 
 app.Run();
 
-public struct TransacaoEfetuada
-{
-    public int OperationStatus { get; set; }
-
-    public int SaldoAtual { get; set; }
-
-    public int Limite { get; set; }
-}
-
-[JsonSerializable(typeof(Transacao))]
 [JsonSerializable(typeof(Extrato))]
 [JsonSerializable(typeof(Saldo))]
-[JsonSerializable(typeof(TransacaoResponse))]
 [JsonSerializable(typeof(SaldoAtual))]
+[JsonSerializable(typeof(TransacaoResponse))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }

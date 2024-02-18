@@ -1,17 +1,7 @@
-FROM alpine:latest as dd_agent
-RUN apk update
-RUN apk add curl
-RUN mkdir -p /opt/datadog
-RUN curl -L https://github.com/DataDog/dd-trace-dotnet/releases/download/v2.14.0/datadog-dotnet-apm-2.14.0.tar.gz \
-    | tar xzf - -C /opt/datadog
-RUN apk del curl --purge
-
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 ARG PUBLISH_FOLDER=app/
 RUN mkdir -p /opt/datadog
-COPY --from=dd_agent /opt/datadog /opt/datadog
 WORKDIR /app
 COPY ${PUBLISH_FOLDER} .
-EXPOSE 80
-EXPOSE 443
+
 ENTRYPOINT ["dotnet", "RinhaBackend2024Q1.Api.dll"]

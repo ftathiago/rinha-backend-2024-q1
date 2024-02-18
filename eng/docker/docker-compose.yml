@@ -10,7 +10,7 @@ services:
     hostname: api01
     environment:
       - ASPNETCORE_URLS=http://0.0.0.0:3000      
-      - ConnectionStrings__Database=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;Pooling=true;MinPoolSize=100;MaxPoolSize=200;ConnectionLifeTime=15;Auto Prepare Min Usages=1;No Reset On Close=true;
+      - ConnectionStrings__Database=Server=db;Port=5432;Database=RinhaBackend;User Id=postgres;Password=123;Pooling=true;MinPoolSize=100;MaxPoolSize=300;ConnectionLifeTime=15;Auto Prepare Min Usages=1;No Reset On Close=true;
     volumes:
       - ./postgresql.conf:/var/lib/postgresql/data/postgresql.conf
       - ./postgresql.conf:/etc/postgresql.conf
@@ -22,8 +22,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: "90MB"
+          cpus: "0.3"
+          memory: "80MB"
 
   api02:
     <<: *api
@@ -46,8 +46,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.1"
-          memory: "40MB"
+          cpus: "0.15"
+          memory: "60MB"
     ulimits:
       nofile:
         soft: 500000
@@ -67,7 +67,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.7"
+          cpus: "0.75"
           memory: "280MB"
 
 networks:

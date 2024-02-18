@@ -6,7 +6,6 @@ using RinhaBackend2024Q1.Api.Models.Requests;
 using RinhaBackend2024Q1.Api.Models.Responses;
 using RinhaBackend2024Q1.Api.Models.Tables;
 using RinhaBackend2024Q1.Api.Repositories;
-using System.Data;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -16,17 +15,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 });
 
-// builder.Services.AddScoped<IDbConnection>(provider =>
-//     new NpgsqlConnection(provider
-//         .GetRequiredService<IConfiguration>()
-//         .GetSection("ConnectionStrings")
-//         .GetValue<string>("Database")));
-
 var connString = builder.Configuration
     .GetSection("ConnectionStrings")
     .GetValue<string>("Database");
-
-// builder.Services.AddScoped<IRegistradorDeTransacoes, Transacoes>();
 
 var app = builder.Build();
 
@@ -54,17 +45,17 @@ balanceApi.MapPost(
 
         if (string.IsNullOrEmpty(transacao.Descricao))
         {
-            return Results.BadRequest();
+            return Results.UnprocessableEntity();
         }
 
         if (transacao.Descricao.Length > 10)
         {
-            return Results.BadRequest();
+            return Results.UnprocessableEntity();
         }
 
         if (!(transacao.Tipo.Equals("c") || transacao.Tipo.Equals("d")))
         {
-            return Results.BadRequest();
+            return Results.UnprocessableEntity();
         }
 
         using var conn = new NpgsqlConnection(connString);
@@ -75,90 +66,56 @@ balanceApi.MapPost(
             var retries = 0;
             while (retries < 10)
             {
-                using var transaction = conn.BeginTransaction(IsolationLevel.ReadCommitted);
-                conn.ExecuteScalar("select 1");
-                var cliente = conn.QueryFirstOrDefault<TabelaCliente>(
-                    Statements.PesquisaClientePorId,
-                    new
-                    {
-                        id,
-                    });
-
-                var novoSaldo = 0;
-                if (transacao.Tipo.Equals("c", StringComparison.OrdinalIgnoreCase))
-                {
-                    novoSaldo = cliente!.SaldoAtual + transacao.Valor;
-                }
-                else
-                {
-                    novoSaldo = cliente!.SaldoAtual - transacao.Valor;
-                }
-
-                if ((cliente.Limite * -1) > novoSaldo)
-                {
-                    transaction.Rollback();
-                    return Results.UnprocessableEntity(new SaldoAtual
-                    {
-                        Limite = cliente.Limite,
-                        Saldo = cliente.SaldoAtual,
-                    });
-                }
-
-                cliente.SaldoAtual = novoSaldo;
-
+                TransacaoEfetuada transacaoEfetuada = default;
                 try
                 {
-                    var atualizado = conn.Execute(
-                        sql: Statements.AtualizarSaldo,
+                    transacaoEfetuada = conn.QueryFirst<TransacaoEfetuada>(
+                        sql: @"
+                            select operation_status as OperationStatus
+                                , out_saldo_atual as SaldoAtual
+                                , out_Limite as Limite
+                            from efetuar_transacao(@Descricao, @Valor, @Tipo, @ClienteId)
+                        ",
                         param: new
                         {
-                            cliente.Id,
-                            cliente.SaldoAtual,
-                            cliente.Versao,
-                            NovaVersao = cliente.Versao + 1,
-                        },
-                        transaction: transaction) == 1;
-
-                    if (!atualizado)
-                    {
-                        transaction.Rollback();
-                        retries++;
-                        continue;
-                    }
-
-                    atualizado = conn.Execute(
-                        sql: Statements.AdicionarTransacao,
-                        param: new
-                        {
-                            cliente.Id,
+                            transacao.Descricao,
                             transacao.Valor,
                             transacao.Tipo,
-                            transacao.Descricao,
-                            Versao = cliente.Versao + 1,
-                        },
-                        transaction: transaction) == 1;
-
-                    if (atualizado)
-                    {
-                        transaction.Commit();
-                        return Results.Ok(new SaldoAtual()
-                        {
-                            Limite = cliente.Limite,
-                            Saldo = cliente.SaldoAtual,
+                            ClienteId = id,
                         });
-                    }
-
-                    transaction.Rollback();
                 }
-                catch (PostgresException ex)
-                    when (ex.ErrorCode == -2147467259)
+                catch (System.Exception e)
                 {
-                    transaction.Rollback();
                     retries++;
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+
+                if (transacaoEfetuada.OperationStatus == 3)
+                {
+                    continue;
+                }
+
+                if (transacaoEfetuada.OperationStatus == 1)
+                {
+                    return Results.Ok(new SaldoAtual()
+                    {
+                        Limite = transacaoEfetuada.Limite,
+                        Saldo = transacaoEfetuada.SaldoAtual,
+                    });
+                }
+
+                if (transacaoEfetuada.OperationStatus == 2)
+                {
+                    return Results.UnprocessableEntity(new SaldoAtual()
+                    {
+                        Limite = transacaoEfetuada.Limite,
+                        Saldo = transacaoEfetuada.SaldoAtual,
+                    });
                 }
             }
 
-            Console.WriteLine("Retries excedidos!");
+            Console.WriteLine("Retries excedidos");
             return Results.UnprocessableEntity();
         }
         finally
@@ -205,6 +162,15 @@ balanceApi.MapGet("/{id}/extrato", ([FromRoute] int id) =>
 });
 
 app.Run();
+
+public struct TransacaoEfetuada
+{
+    public int OperationStatus { get; set; }
+
+    public int SaldoAtual { get; set; }
+
+    public int Limite { get; set; }
+}
 
 [JsonSerializable(typeof(Transacao))]
 [JsonSerializable(typeof(Extrato))]

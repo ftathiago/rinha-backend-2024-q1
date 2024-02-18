@@ -35,68 +35,77 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.efetuar_transacao(descricao character varying, valor integer, tipo character, client_id integer, OUT operation_status integer, OUT out_saldo_atual integer, OUT out_limite integer)
- RETURNS record
- LANGUAGE plpgsql
-AS $function$
-declare versao_antiga int;	
-	    novo_saldo int;
-	    atualizados int;
+CREATE or replace FUNCTION efetuar_transacao(
+    in descricao varchar(10), 
+    in valor int, 
+    in tipo char(1),
+    in client_id int,
+    out operation_status int,
+    out out_saldo_atual int,
+    out out_limite int) 
+AS $$
+declare versao_antiga int;
+        novo_saldo int;
+        atualizados int;
 begin
---  begin
-		/*
-		 * Operation status
-		 * 1= Sucesso
-		 * 2= Saldo Insuficiente
-		 * 3= Conflito
-		 */	
-	  select saldo_atual 
-	       , versao 
-	       , limite
-	  from clientes
-	  where id = client_id
-	   into out_saldo_atual, 
-	        versao_antiga, 
-	        out_limite;	 
+/*
+*   Operation status
+*   1= Sucesso
+*   2= Saldo Insuficiente
+*   3= Conflito
+*/    
+    -- Resgata saldo atual
+    select saldo_atual 
+         , versao 
+         , limite
+    from clientes
+    where id = client_id
+    into out_saldo_atual, 
+         versao_antiga, 
+         out_limite;     
 
-	       novo_saldo := out_saldo_atual - valor;
-      if tipo = 'd' then
-	    novo_saldo := out_saldo_atual + valor;
-	  end if;
-	  if (out_limite * -1) > novo_saldo then
-	    operation_status := 2;
-	    return;  
-	  end if;
-	  
-	  update clientes c set 
-	  	c.saldo_atual = novo_saldo,
-	  	c.versao = versao_antiga + 1
-	  where c.id = client_id
-	    and c.versao = versao_antiga;
+    -- Atualiza saldo do cliente
+    novo_saldo := out_saldo_atual - valor;
+    if tipo = 'c' then
+        novo_saldo := out_saldo_atual + valor;
+    end if;
+    
+    if (out_limite * -1) > novo_saldo then
+        operation_status := 2;
+        return;  
+    end if;
 
-      GET DIAGNOSTICS atualizados = ROW_COUNT;   
-	  if atualizados = 0 then
-	  	operation_status := 3; 
-		return;
-	  end if;
-	 
-	  INSERT INTO transacoes (
-	 	cliente_id, 
-	 	valor, 
-	 	tipo, 
-		descricao, 
-		realizada_em, 
-		versao
-	  ) VALUES(
-	 	client_id, 
-		valor, 
-		tipo,
-		descricao, 
-	 	now(), 
-	 	versao_antiga + 1);
---  exception when others then 
-  	operation_status := 1;	
---  end;	
+    update clientes set 
+          saldo_atual = novo_saldo
+        , versao = versao_antiga + 1
+    where id = client_id
+      and versao = versao_antiga;
+
+    -- Confirma sucesso da atualização de saldo
+    GET DIAGNOSTICS atualizados = ROW_COUNT;   
+    if atualizados = 0 then
+        operation_status := 3; 
+        return;
+    end if;
+     
+    -- Registra transação 
+    INSERT INTO transacoes (
+          cliente_id
+        , valor
+        , tipo
+        , descricao
+        , realizada_em
+        , versao
+    ) VALUES(
+          client_id
+        , valor
+        , tipo
+        , descricao
+        , now()
+        , versao_antiga + 1
+    );
+
+    out_saldo_atual := novo_saldo;     
+    operation_status := 1;    
 END;
-$function$
-;
+$$ LANGUAGE plpgsql;

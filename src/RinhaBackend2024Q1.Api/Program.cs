@@ -147,7 +147,11 @@ balanceApi.MapGet("/{id}/extrato", ([FromRoute] int id) =>
                     Total = viewExtrato.Total,
                 };
 
-                extrato.UltimasTransacoes.Add(transacao);
+                if (transacao.RealizadaEm is not null)
+                {
+                    extrato.UltimasTransacoes.Enqueue(transacao);
+                }
+
                 return default;
             },
             param: new { id },

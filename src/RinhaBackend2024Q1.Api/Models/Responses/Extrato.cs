@@ -4,10 +4,10 @@ public class Extrato
 {
     public Extrato()
     {
-        UltimasTransacoes = new List<TransacaoResponse>(10);
+        UltimasTransacoes = new Queue<TransacaoResponse>(10);
     }
 
     public Saldo? Saldo { get; set; }
 
-    public List<TransacaoResponse> UltimasTransacoes { get; set; }
+    public Queue<TransacaoResponse> UltimasTransacoes { get; set; }
 }

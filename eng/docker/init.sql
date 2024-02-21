@@ -1,4 +1,4 @@
-ALTER SYSTEM SET max_connections TO '2000';
+ALTER SYSTEM SET max_connections TO '300';
 
 CREATE UNLOGGED TABLE clientes (
     id SERIAL PRIMARY KEY,
@@ -36,11 +36,11 @@ END;
 $$;
 
 CREATE or replace FUNCTION efetuar_transacao(
-    in descricao varchar(10), 
-    in valor int, 
-    in tipo char(1),
-    in client_id int,
-    out operation_status int,
+    in in_descricao varchar(10), 
+    in in_valor int, 
+    in in_tipo char(1),
+    in in_client_id int,
+    out out_operation_status int,
     out out_saldo_atual int,
     out out_limite int) 
 AS $$
@@ -59,32 +59,32 @@ begin
          , versao 
          , limite
     from clientes
-    where id = client_id
+    where id = in_client_id
     into out_saldo_atual, 
          versao_antiga, 
          out_limite;     
 
     -- Atualiza saldo do cliente
-    novo_saldo := out_saldo_atual - valor;
-    if tipo = 'c' then
-        novo_saldo := out_saldo_atual + valor;
+    novo_saldo := out_saldo_atual - in_valor;
+    if in_tipo = 'c' then
+        novo_saldo := out_saldo_atual + in_valor;
     end if;
     
     if (out_limite * -1) > novo_saldo then
-        operation_status := 2;
+        out_operation_status := 2;
         return;  
     end if;
 
     update clientes set 
           saldo_atual = novo_saldo
         , versao = versao_antiga + 1
-    where id = client_id
+    where id = in_client_id
       and versao = versao_antiga;
 
     -- Confirma sucesso da atualização de saldo
     GET DIAGNOSTICS atualizados = ROW_COUNT;   
     if atualizados = 0 then
-        operation_status := 3; 
+        out_operation_status := 3; 
         return;
     end if;
      
@@ -97,15 +97,15 @@ begin
         , realizada_em
         , versao
     ) VALUES(
-          client_id
-        , valor
-        , tipo
-        , descricao
+          in_client_id
+        , in_valor
+        , in_tipo
+        , in_descricao
         , now()
         , versao_antiga + 1
     );
 
     out_saldo_atual := novo_saldo;     
-    operation_status := 1;    
+    out_operation_status := 1;    
 END;
 $$ LANGUAGE plpgsql;

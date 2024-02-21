@@ -34,7 +34,7 @@ var balanceApi = app.MapGroup("/clientes");
 
 balanceApi.MapPost(
     "/{id}/transacoes",
-    (
+    async (
         [FromRoute] int id,
         [FromBody] TransacaoRequest transacao) =>
     {
@@ -60,7 +60,7 @@ balanceApi.MapPost(
 
         using var conn = new NpgsqlConnection(connString);
 
-        conn.Open();
+        await conn.OpenAsync();
         try
         {
             var retries = 0;
@@ -69,9 +69,9 @@ balanceApi.MapPost(
                 TransacaoEfetuada transacaoEfetuada = default;
                 try
                 {
-                    transacaoEfetuada = conn.QueryFirst<TransacaoEfetuada>(
+                    transacaoEfetuada = await conn.QueryFirstAsync<TransacaoEfetuada>(
                         sql: @"
-                            select operation_status as OperationStatus
+                            select out_operation_status as OperationStatus
                                 , out_saldo_atual as SaldoAtual
                                 , out_Limite as Limite
                             from efetuar_transacao(@Descricao, @Valor, @Tipo, @ClienteId)
@@ -120,11 +120,11 @@ balanceApi.MapPost(
         }
         finally
         {
-            conn.Close();
+            await conn.CloseAsync();
         }
     });
 
-balanceApi.MapGet("/{id}/extrato", ([FromRoute] int id) =>
+balanceApi.MapGet("/{id}/extrato", async ([FromRoute] int id) =>
 {
     if (id < 1 || id > 5)
     {
@@ -132,11 +132,11 @@ balanceApi.MapGet("/{id}/extrato", ([FromRoute] int id) =>
     }
 
     using var connection = new NpgsqlConnection(connString);
-    connection.Open();
+    await connection.OpenAsync();
     try
     {
         var extrato = new Extrato();
-        connection.Query<ViewExtrato, TransacaoResponse, Extrato?>(
+        await connection.QueryAsync<ViewExtrato, TransacaoResponse, Extrato?>(
             sql: Statements.Extrato,
             map: (viewExtrato, transacao) =>
             {
@@ -161,7 +161,7 @@ balanceApi.MapGet("/{id}/extrato", ([FromRoute] int id) =>
     }
     finally
     {
-        connection.Close();
+        await connection.CloseAsync();
     }
 });
 

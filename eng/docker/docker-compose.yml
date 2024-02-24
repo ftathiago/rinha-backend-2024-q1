@@ -23,8 +23,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: "80MB"
+          cpus: "0.2"
+          memory: "70MB"
 
   api02:
     <<: *api
@@ -74,8 +74,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.75"
-          memory: "330MB"
+          cpus: "0.95"
+          memory: "350MB"
 
 networks:
   default:

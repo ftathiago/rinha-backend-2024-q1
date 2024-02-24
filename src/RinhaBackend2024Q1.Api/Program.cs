@@ -1,11 +1,8 @@
-using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 using RinhaBackend2024Q1.Api.Models;
 using RinhaBackend2024Q1.Api.Models.Requests;
 using RinhaBackend2024Q1.Api.Models.Responses;
-using RinhaBackend2024Q1.Api.Models.Tables;
-using RinhaBackend2024Q1.Api.Repositories;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -15,20 +12,15 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 });
 
+builder.Logging.ClearProviders();
+
 var connString = builder.Configuration
     .GetSection("ConnectionStrings")
     .GetValue<string>("Database");
 
-var app = builder.Build();
+using var dataSource = new NpgsqlDataSourceBuilder(connString).Build();
 
-var clients = new Cliente[]
-{
-    new (id: 1, limit: 100000),
-    new (id: 2, limit: 80000),
-    new (id: 3, limit: 1000000),
-    new (id: 4, limit: 10000000),
-    new (id: 5, limit: 500000),
-};
+var app = builder.Build();
 
 var balanceApi = app.MapGroup("/clientes");
 
@@ -58,9 +50,8 @@ balanceApi.MapPost(
             return Results.UnprocessableEntity();
         }
 
-        using var conn = new NpgsqlConnection(connString);
+        await using var conn = await dataSource.OpenConnectionAsync();
 
-        await conn.OpenAsync();
         try
         {
             var retries = 0;
@@ -69,22 +60,25 @@ balanceApi.MapPost(
                 TransacaoEfetuada transacaoEfetuada = default;
                 try
                 {
-                    transacaoEfetuada = await conn.QueryFirstAsync<TransacaoEfetuada>(
-                        sql: @"
+                    var sqlTransacao =
+                        @$"
                             select out_operation_status as OperationStatus
                                 , out_saldo_atual as SaldoAtual
                                 , out_Limite as Limite
-                            from efetuar_transacao(@Descricao, @Valor, @Tipo, @ClienteId)
-                        ",
-                        param: new
-                        {
-                            transacao.Descricao,
-                            transacao.Valor,
-                            transacao.Tipo,
-                            ClienteId = id,
-                        });
+                            from efetuar_transacao('{transacao.Descricao}', {transacao.Valor}, '{transacao.Tipo}', {id})
+                        ";
+                    using var command = new NpgsqlCommand(sqlTransacao, conn);
+                    using var resultSet = await command.ExecuteReaderAsync();
+                    await resultSet.ReadAsync();
+
+                    transacaoEfetuada = new TransacaoEfetuada
+                    {
+                        OperationStatus = resultSet.GetInt32(0),
+                        SaldoAtual = resultSet.GetInt32(1),
+                        Limite = resultSet.GetInt32(2),
+                    };
                 }
-                catch (System.Exception e)
+                catch (Exception e)
                 {
                     retries++;
                     Console.WriteLine(e.Message);
@@ -131,31 +125,53 @@ balanceApi.MapGet("/{id}/extrato", async ([FromRoute] int id) =>
         return Results.NotFound();
     }
 
-    using var connection = new NpgsqlConnection(connString);
-    await connection.OpenAsync();
+    await using var connection = await dataSource.OpenConnectionAsync();
+
     try
     {
         var extrato = new Extrato();
-        await connection.QueryAsync<ViewExtrato, TransacaoResponse, Extrato?>(
-            sql: Statements.Extrato,
-            map: (viewExtrato, transacao) =>
+
+        var sql =
+            @$"
+                select c.id
+                     , c.saldo_atual as Total
+                     , c.limite
+                     , t.id as TransacaoId
+                     , t.valor
+                     , t.tipo
+                     , t.descricao
+                     , t.realizada_em as RealizadaEm
+                from clientes c
+                    left
+                join transacoes t  on t.cliente_id = c.id
+                where c.id = {id}
+                order by t.realizada_em desc
+                limit 10
+            ";
+
+        using var command = new NpgsqlCommand(sql, connection);
+        using var resultSet = await command.ExecuteReaderAsync();
+
+        while (await resultSet.ReadAsync())
+        {
+            extrato.Saldo ??= new Saldo
             {
-                extrato.Saldo ??= new Saldo
-                {
-                    Limite = viewExtrato.Limite,
-                    DataExtrato = viewExtrato.DataExtrato,
-                    Total = viewExtrato.Total,
-                };
+                Limite = resultSet.GetInt32(2),
+                DataExtrato = DateTime.Now,
+                Total = resultSet.GetInt32(1),
+            };
 
-                if (transacao.RealizadaEm is not null)
+            if (!resultSet.IsDBNull(4))
+            {
+                extrato.UltimasTransacoes.Enqueue(new TransacaoResponse
                 {
-                    extrato.UltimasTransacoes.Enqueue(transacao);
-                }
-
-                return default;
-            },
-            param: new { id },
-            splitOn: "transacaoid");
+                    Descricao = resultSet.GetString(6),
+                    RealizadaEm = resultSet.GetDateTime(7),
+                    Tipo = resultSet.GetString(5),
+                    Valor = resultSet.GetInt32(4),
+                });
+            }
+        }
 
         return Results.Ok(extrato);
     }
@@ -171,6 +187,7 @@ app.Run();
 [JsonSerializable(typeof(Saldo))]
 [JsonSerializable(typeof(SaldoAtual))]
 [JsonSerializable(typeof(TransacaoResponse))]
+[JsonSerializable(typeof(TransacaoRequest))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }

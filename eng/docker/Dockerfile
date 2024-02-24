@@ -1,6 +1,5 @@
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 ARG PUBLISH_FOLDER=app/
-RUN mkdir -p /opt/datadog
 WORKDIR /app
 COPY ${PUBLISH_FOLDER} .
 

@@ -8,7 +8,7 @@ services:
   api01: &api
     build:
       context: ../../
-      dockerfile: ./eng/docker/dockerfile
+      dockerfile: ./eng/docker/Dockerfile
       args:
         - PUBLISH_FOLDER=app/
     hostname: api01

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
-using RinhaBackend2024Q1.Api.Models;
 using RinhaBackend2024Q1.Api.Models.Requests;
 using RinhaBackend2024Q1.Api.Models.Responses;
 using System.Text.Json.Serialization;
@@ -57,7 +56,8 @@ balanceApi.MapPost(
             var retries = 0;
             while (retries < 10)
             {
-                TransacaoEfetuada transacaoEfetuada = default;
+                var operationStatus = 3;
+                SaldoAtual transacaoEfetuada = default;
                 try
                 {
                     var sqlTransacao =
@@ -71,10 +71,10 @@ balanceApi.MapPost(
                     using var resultSet = await command.ExecuteReaderAsync();
                     await resultSet.ReadAsync();
 
-                    transacaoEfetuada = new TransacaoEfetuada
+                    operationStatus = resultSet.GetInt32(0);
+                    transacaoEfetuada = new SaldoAtual
                     {
-                        OperationStatus = resultSet.GetInt32(0),
-                        SaldoAtual = resultSet.GetInt32(1),
+                        Saldo = resultSet.GetInt32(1),
                         Limite = resultSet.GetInt32(2),
                     };
                 }
@@ -85,27 +85,19 @@ balanceApi.MapPost(
                     continue;
                 }
 
-                if (transacaoEfetuada.OperationStatus == 3)
+                if (operationStatus == 3)
                 {
                     continue;
                 }
 
-                if (transacaoEfetuada.OperationStatus == 1)
+                if (operationStatus == 1)
                 {
-                    return Results.Ok(new SaldoAtual()
-                    {
-                        Limite = transacaoEfetuada.Limite,
-                        Saldo = transacaoEfetuada.SaldoAtual,
-                    });
+                    return Results.Ok(transacaoEfetuada);
                 }
 
-                if (transacaoEfetuada.OperationStatus == 2)
+                if (operationStatus == 2)
                 {
-                    return Results.UnprocessableEntity(new SaldoAtual()
-                    {
-                        Limite = transacaoEfetuada.Limite,
-                        Saldo = transacaoEfetuada.SaldoAtual,
-                    });
+                    return Results.UnprocessableEntity(transacaoEfetuada);
                 }
             }
 
@@ -157,13 +149,13 @@ balanceApi.MapGet("/{id}/extrato", async ([FromRoute] int id) =>
             extrato.Saldo ??= new Saldo
             {
                 Limite = resultSet.GetInt32(2),
-                DataExtrato = DateTime.Now,
+                Data_Extrato = DateTime.Now,
                 Total = resultSet.GetInt32(1),
             };
 
             if (!resultSet.IsDBNull(4))
             {
-                extrato.UltimasTransacoes.Enqueue(new TransacaoResponse
+                extrato.Ultimas_Transacoes.Enqueue(new TransacaoResponse
                 {
                     Descricao = resultSet.GetString(6),
                     RealizadaEm = resultSet.GetDateTime(7),

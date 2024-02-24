@@ -6,11 +6,11 @@ public class Extrato
 {
     public Extrato()
     {
-        UltimasTransacoes = new Queue<TransacaoResponse>(10);
+        Ultimas_Transacoes = new Queue<TransacaoResponse>(10);
     }
 
     public Saldo? Saldo { get; set; }
 
     [JsonPropertyName("ultimas_transacoes")]
-    public Queue<TransacaoResponse> UltimasTransacoes { get; set; }
+    public Queue<TransacaoResponse> Ultimas_Transacoes { get; set; }
 }

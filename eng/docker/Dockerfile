@@ -1,6 +1,10 @@
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
-ARG PUBLISH_FOLDER=app/
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS base
 WORKDIR /app
-COPY ${PUBLISH_FOLDER} .
 
-ENTRYPOINT ["dotnet", "/app/RinhaBackend2024Q1.Api.dll"]
+ENV PATH="${PATH}:/root/.dotnet/tools"
+RUN apt-get update && apt-get -y install curl
+RUN dotnet tool install --global dotnet-stack && dotnet tool install --global dotnet-counters
+
+COPY . . 
+
+RUN dotnet build

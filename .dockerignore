@@ -1,2 +1,6 @@
-./**/*.*
-!app/*.*
+# ./**/*.*
+# !app/*.*
+# !src/*.*
+# !stylecop.json
+# !rinha-backend-2024-q1.sln
+eng/*.*
